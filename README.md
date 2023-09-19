@@ -1,6 +1,6 @@
-# Huawei Grad-TTS for Chinese, integrated Bert for rhyme and integrated BigVGAN as vocoder
+# Huawei Grad-TTS for Chinese, integrated Bert and BigVGAN
 
-#### 用于学习的TTS算法项目，如果您在寻找直接用于生产的TTS，本项目并不适合您！
+**用于学习的TTS算法项目，推理速度比较慢，但diffusion是大趋势**
 <div align="center">
 
 ![grad_tts](assets/grad_tts.jpg)
@@ -9,107 +9,115 @@
 Framework
 </div>
 
-## Acoustic Model
 
-### Install and Test
+## 使用训练好的模型测试
 
-download [bigvgan_base_24khz_100band](https://drive.google.com/drive/folders/1e9wdM29d-t3EHUpBb8T4dcHrkYGAXTgq) from https://github.com/NVIDIA/BigVGAN
+1. 从 [NVIDIA/BigVGAN]( https://github.com/NVIDIA/BigVGAN) 下载声码器模型 [bigvgan_base_24khz_100band](https://drive.google.com/drive/folders/1e9wdM29d-t3EHUpBb8T4dcHrkYGAXTgq) 
 
-download [prosody_model](https://github.com/Executedone/Chinese-FastSpeech2) from [Executedone/Chinese-FastSpeech2](https://github.com/Executedone/Chinese-FastSpeech2)
+	将 [g_05000000]() 放到 ./bigvgan_pretrain/g_05000000
 
-download [grad_tts.pt](https://github.com/PlayVoice/Bert-Grad-Vocos-TTS/releases/tag/release) from release page
+2. 从 [Executedone/Chinese-FastSpeech2](https://github.com/Executedone/Chinese-FastSpeech2) 下载BERT韵律模型 [prosody_model](https://github.com/Executedone/Chinese-FastSpeech2)
 
-put [g_05000000]() To ./bigvgan_pretrain/g_05000000
+	将 best_model.pt 改名为 prosody_model.pt，并放到 ./bert/prosody_model.pt
 
-rename best_model.pt to prosody_model.pt
+3. 从Release页面下载TTS模型 [grad_tts.pt](https://github.com/PlayVoice/Grad-TTS-Chinese/releases/tag/release) from release page
 
-put [prosody_model.pt]() To ./bert/prosody_model.pt
+	将 [grad_tts.pt]() 放到当前目录，或者任意地方
 
-put [grad_tts.pt]() To ./grad_tts.pt
+4. 安装环境依赖
 
-> pip install -r requirements.txt
+	> pip install -r requirements.txt
 
-```
-> cd ./grad/monotonic_align
-> python setup.py build_ext --inplace
-> cd -
-```
+	```
+	cd ./grad/monotonic_align
+	python setup.py build_ext --inplace
+	cd -
+	```
+5. 推理测试
 
-> python inference.py --file test.txt --checkpoint grad_tts.pt --timesteps 4 --temperature 1.15
+	> python inference.py --file test.txt --checkpoint grad_tts.pt --timesteps 10 --temperature 1.015
 
-the waves infered will be saved in `./inference_out`
+	生成音频在文件夹`./inference_out`
 
-**if `timesteps` is set to 0, then diffusion will be skipped.**
+	**`timesteps` 越大效果越好、同样推理时间越久；当被设置为0是, diffusion将被跳过、输出FrameEncoder生成的mel谱**
 
-### Data
+	**`temperature` 决定diffusion推理时，添加的噪声量，需要推理调试出最佳值**
 
-download [baker](https://aistudio.baidu.com/datasetdetail/36741) data: https://www.data-baker.com/data/index/TNtts/
+## 标贝数据
 
-put `Waves` to ./data/Waves
+1. 下载 [标贝数据](https://aistudio.baidu.com/datasetdetail/36741) 官方连接: https://www.data-baker.com/data/index/TNtts/
 
-put `000001-010000.txt` to ./data/000001-010000.txt
+	将 `Waves` 放到 ./data/Waves
 
-1, resample
+	将 `000001-010000.txt` 放到 ./data/000001-010000.txt
 
-> python tools/preprocess_a.py -w ./data/Wave/ -o ./data/wavs -s `24000`
+2. 重采样到24KHz，因为采用BigVGAN 24K模型
 
-2, extract mel
+	> python tools/preprocess_a.py -w ./data/Wave/ -o ./data/wavs -s `24000`
 
-> python tools/preprocess_m.py --wav data/wavs/ --out data/mels/
+3. 提取mel谱，替换声码器需注意，mel参数写死在代码中
 
-3, extract bert, and generate train files by the way
+	> python tools/preprocess_m.py --wav data/wavs/ --out data/mels/
 
-> python tools/preprocess_b.py
+4. 提取BERT韵律向量，同时生成训练索引文件 `train.txt` 和 `valid.txt`
 
-output contains `data/berts/` and `data/files`
+	> python tools/preprocess_b.py
 
-注意：打印信息，是在剔除`儿化音`（项目为算法演示，不做生产）
+	输出包括 `data/berts/` 和 `data/files`
 
-Raw label
-``` c
-000001	卡尔普#2陪外孙#1玩滑梯#4。
-	ka2 er2 pu3 pei2 wai4 sun1 wan2 hua2 ti1
-000002	假语村言#2别再#1拥抱我#4。
-	jia2 yu3 cun1 yan2 bie2 zai4 yong1 bao4 wo3
-```
-Cleaned label
-``` c
-000001	卡尔普陪外孙玩滑梯。
-	ka2 er2 pu3 pei2 wai4 sun1 wan2 hua2 ti1
-	sil k a2 ^ er2 p u3 p ei2 ^ uai4 s uen1 ^ uan2 h ua2 t i1 sp sil
-000002	假语村言别再拥抱我。
-	jia2 yu3 cun1 yan2 bie2 zai4 yong1 bao4 wo3
-	sil j ia2 ^ v3 c uen1 ^ ian2 b ie2 z ai4 ^ iong1 b ao4 ^ uo3 sp sil
-```
-Train files
-```
-./data/wavs/000001.wav|./data/mels/000001.pt|./data/berts/000001.npy|sil k a2 ^ er2 p u3 p ei2 ^ uai4 s uen1 ^ uan2 h ua2 t i1 sp sil
-./data/wavs/000002.wav|./data/mels/000002.pt|./data/berts/000002.npy|sil j ia2 ^ v3 c uen1 ^ ian2 b ie2 z ai4 ^ iong1 b ao4 ^ uo3 sp sil
-```
-Error
-```
-002365	这图#2难不成#2是#1Ｐ过的#4？
-	zhe4 tu2 nan2 bu4 cheng2 shi4 P IY1 guo4 de5
-```
-### Train
+	注意：打印信息，是在剔除`儿化音`（项目为算法演示，不做生产）
 
-debug train
+5. 额外说明
 
-> python tools/preprocess_d.py
+	原始标注为
+	``` c
+	000001	卡尔普#2陪外孙#1玩滑梯#4。
+		ka2 er2 pu3 pei2 wai4 sun1 wan2 hua2 ti1
+	000002	假语村言#2别再#1拥抱我#4。
+		jia2 yu3 cun1 yan2 bie2 zai4 yong1 bao4 wo3
+	```
 
-start train
+	需要标注为，BERT需要汉字 `卡尔普陪外孙玩滑梯。` (包括标点)，TTS需要声韵母 `sil k a2 ^ er2 p u3 p ei2 ^ uai4 s uen1 ^ uan2 h ua2 t i1 sp sil`
+	``` c
+	000001	卡尔普陪外孙玩滑梯。
+		ka2 er2 pu3 pei2 wai4 sun1 wan2 hua2 ti1
+		sil k a2 ^ er2 p u3 p ei2 ^ uai4 s uen1 ^ uan2 h ua2 t i1 sp sil
+	000002	假语村言别再拥抱我。
+		jia2 yu3 cun1 yan2 bie2 zai4 yong1 bao4 wo3
+		sil j ia2 ^ v3 c uen1 ^ ian2 b ie2 z ai4 ^ iong1 b ao4 ^ uo3 sp sil
+	```
 
-> python train.py
+	训练标注为
+	```
+	./data/wavs/000001.wav|./data/mels/000001.pt|./data/berts/000001.npy|sil k a2 ^ er2 p u3 p ei2 ^ uai4 s uen1 ^ uan2 h ua2 t i1 sp sil
+	./data/wavs/000002.wav|./data/mels/000002.pt|./data/berts/000002.npy|sil j ia2 ^ v3 c uen1 ^ ian2 b ie2 z ai4 ^ iong1 b ao4 ^ uo3 sp sil
+	```
 
-resume train
+	遇到这句话会出错
+	```
+	002365	这图#2难不成#2是#1Ｐ过的#4？
+		zhe4 tu2 nan2 bu4 cheng2 shi4 P IY1 guo4 de5
+	```
 
-> python train.py -p logs/new_exp/grad_tts_***.pt
+## 训练
 
-### Inference
+1. 调试dataset
+
+	> python tools/preprocess_d.py
+
+2. 启动训练
+
+	> python train.py
+
+3. 恢复训练
+
+	> python train.py -p logs/new_exp/grad_tts_***.pt
+
+## 推理
 
 > python inference.py --file test.txt --checkpoint ./logs/new_exp/grad_tts_***.pt --timesteps 20 --temperature 1.15
 
-### Code sources and references
+## 本项目基于以下项目
 
 https://github.com/huawei-noah/Speech-Backbones/blob/main/Grad-TTS
 
@@ -119,7 +127,9 @@ https://github.com/Executedone/Chinese-FastSpeech2
 
 https://github.com/PlayVoice/vits_chinese
 
-# Raw Grad-TTS information
+https://github.com/NVIDIA/BigVGAN
+
+# Grad-TTS官方信息
 
 Official implementation of the Grad-TTS model based on Diffusion Probabilistic Modelling. For all details check out our paper accepted to ICML 2021 via [this](https://arxiv.org/abs/2105.06337) link.
 
@@ -140,7 +150,12 @@ Recently, denoising diffusion probabilistic models and generative score matching
 * Phonemization utilizes CMUdict, official github repository: [link](https://github.com/cmusphinx/cmudict).
 
 
-## Vocoder Model
+# BigVGAN 官方信息
+
+### BigVGAN: A Universal Neural Vocoder with Large-Scale Training
+#### Sang-gil Lee, Wei Ping, Boris Ginsburg, Bryan Catanzaro, Sungroh Yoon
+
+<center><img src="https://user-images.githubusercontent.com/15963413/218609148-881e39df-33af-4af9-ab95-1427c4ebf062.png" width="800"></center>
 
 project link: https://github.com/NVIDIA/BigVGAN
 
