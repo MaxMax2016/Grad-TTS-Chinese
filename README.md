@@ -10,7 +10,7 @@ Framework
 </div>
 
 
-## 使用训练好的模型测试
+## 使用已训练模型测试
 
 1. 从 [NVIDIA/BigVGAN]( https://github.com/NVIDIA/BigVGAN) 下载声码器模型 [bigvgan_base_24khz_100band](https://drive.google.com/drive/folders/1e9wdM29d-t3EHUpBb8T4dcHrkYGAXTgq) 
 
@@ -27,21 +27,19 @@ Framework
 4. 安装环境依赖
 
 	> pip install -r requirements.txt
+	> cd ./grad/monotonic_align
+	> python setup.py build_ext --inplace
+	> cd -
 
-	```
-	cd ./grad/monotonic_align
-	python setup.py build_ext --inplace
-	cd -
-	```
 5. 推理测试
 
 	> python inference.py --file test.txt --checkpoint grad_tts.pt --timesteps 10 --temperature 1.015
 
 	生成音频在文件夹`./inference_out`
 
-	**`timesteps` 越大效果越好、同样推理时间越久；当被设置为0是, diffusion将被跳过、输出FrameEncoder生成的mel谱**
+	**`timesteps` 越大效果越好、推理时间越久；当被设置为0, 将跳过diffusion、输出FrameEncoder生成的mel谱**
 
-	**`temperature` 决定diffusion推理时，添加的噪声量，需要推理调试出最佳值**
+	**`temperature` 决定diffusion推理添加的噪声量，需要调试出最佳值**
 
 ## 标贝数据
 
