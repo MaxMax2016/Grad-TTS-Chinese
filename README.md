@@ -27,8 +27,11 @@ Framework
 4. 安装环境依赖
 
 	> pip install -r requirements.txt
+ 
 	> cd ./grad/monotonic_align
+ 
 	> python setup.py build_ext --inplace
+ 
 	> cd -
 
 5. 推理测试
