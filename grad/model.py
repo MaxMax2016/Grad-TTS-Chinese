@@ -1,9 +1,8 @@
 import math
 import random
-
 import torch
 
-from grad.ssim import SSIM
+
 from grad import monotonic_align
 from grad.base import BaseModule
 from grad.encoder import TextEncoder
@@ -11,8 +10,6 @@ from grad.encoder import FrameEncoder
 from grad.diffusion import Diffusion
 from grad.utils import sequence_mask, generate_path, duration_loss, fix_len_compatibility
 
-
-SsimLoss = SSIM()
 
 class GradTTS(BaseModule):
     def __init__(self, n_vocab, n_spks, spk_emb_dim, n_enc_channels, filter_channels, filter_channels_dp, 
@@ -42,7 +39,7 @@ class GradTTS(BaseModule):
                                    filter_channels, filter_channels_dp, n_heads, 
                                    n_enc_layers, enc_kernel, enc_dropout, window_size)
         self.framenc = FrameEncoder(n_feats, filter_channels, n_heads,
-                                    n_enc_layers, enc_kernel, enc_dropout, window_size)
+                                    n_layers=4, kernel_size=3, p_dropout=0.1, window_size=4)
         self.decoder = Diffusion(n_feats, dec_dim, n_spks, spk_emb_dim, beta_min, beta_max, pe_scale)
 
     @torch.no_grad()
@@ -88,11 +85,11 @@ class GradTTS(BaseModule):
         mu_y = mu_y.transpose(1, 2)
 
         # Frame Encoder
-        mu_y = self.framenc(mu_y, y_mask, spk)
+        mu_y = self.framenc(mu_y, y_mask)
         encoder_outputs = mu_y[:, :, :y_max_length]
 
         if use_diff == 0 :
-            decoder_outputs = encoder_outputs + torch.randn_like(encoder_outputs) * 0.25  # Perturbation
+            decoder_outputs = encoder_outputs + torch.randn_like(encoder_outputs) * 0.1  # Perturbation
             return encoder_outputs, decoder_outputs, attn[:, :, :y_max_length]
 
         # Sample latent representation from terminal distribution N(mu_y, I)
@@ -156,9 +153,10 @@ class GradTTS(BaseModule):
         prior_loss = prior_loss / (torch.sum(y_mask) * self.n_feats)
 
         # Frame Encoder
-        mu_y = self.framenc(mu_y, y_mask, spk)
-        # Mel ssim
-        mel_loss = SsimLoss(mu_y, y, y_mask)
+        mu_y = self.framenc(mu_y, y_mask)
+        # Mel
+        mel_loss = torch.sum(0.5 * ((y - mu_y) ** 2 + math.log(2 * math.pi)) * y_mask)
+        mel_loss = mel_loss / (torch.sum(y_mask) * self.n_feats)
 
         # fast train
         if skip_diff:
