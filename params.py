@@ -39,7 +39,7 @@ pe_scale = 1000  # 1 for `grad-tts-old.pt` checkpoint
 full_epochs = 900
 fast_epochs = 100
 
-log_dir = 'logs/new_exp'
+log_dir = 'logs/matcha'
 test_size = 4
 batch_size = 8
 learning_rate = 1e-4
