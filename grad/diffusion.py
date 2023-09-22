@@ -3,7 +3,6 @@ import torch
 
 from einops import rearrange
 from grad.base import BaseModule
-from grad.solver import NoiseScheduleVP, MaxLikelihood
 
 
 class Mish(BaseModule):
@@ -109,6 +108,8 @@ class SinusoidalPosEmb(BaseModule):
         self.dim = dim
 
     def forward(self, x, scale=1000):
+        if x.ndim < 1:
+            x = x.unsqueeze(0)
         device = x.device
         half_dim = self.dim // 2
         emb = math.log(10000) / (half_dim - 1)
@@ -207,61 +208,3 @@ class GradLogPEstimator2d(BaseModule):
         output = self.final_conv(x * mask)
 
         return (output * mask).squeeze(1)
-
-
-def get_noise(t, beta_init, beta_term, cumulative=False):
-    if cumulative:
-        noise = beta_init*t + 0.5*(beta_term - beta_init)*(t**2)
-    else:
-        noise = beta_init + (beta_term - beta_init)*t
-    return noise
-
-
-class Diffusion(BaseModule):
-    def __init__(self, n_feats, dim,
-                 n_spks=1, spk_emb_dim=64,
-                 beta_min=0.05, beta_max=20, pe_scale=1000):
-        super(Diffusion, self).__init__()
-        self.n_feats = n_feats
-        self.dim = dim
-        self.n_spks = n_spks
-        self.spk_emb_dim = spk_emb_dim
-        self.beta_min = beta_min
-        self.beta_max = beta_max
-        self.pe_scale = pe_scale
-
-        # self.solver = NoiseScheduleVP()
-        self.solver = MaxLikelihood()
-
-        self.estimator = GradLogPEstimator2d(dim, n_spks=n_spks,
-                                             spk_emb_dim=spk_emb_dim,
-                                             pe_scale=pe_scale)
-
-    def forward_diffusion(self, x0, mask, mu, t):
-        time = t.unsqueeze(-1).unsqueeze(-1)
-        cum_noise = get_noise(time, self.beta_min, self.beta_max, cumulative=True)
-        mean = x0*torch.exp(-0.5*cum_noise) + mu*(1.0 - torch.exp(-0.5*cum_noise))
-        variance = 1.0 - torch.exp(-cum_noise)
-        z = torch.randn(x0.shape, dtype=x0.dtype, device=x0.device, 
-                        requires_grad=False)
-        xt = mean + z * torch.sqrt(variance)
-        return xt * mask, z * mask
-
-    @torch.no_grad()
-    def forward(self, z, mask, mu, n_timesteps, stoc=False, spk=None):
-        return self.solver.reverse_diffusion(self.estimator, z, mask, mu, n_timesteps, stoc, spk)
-
-    def loss_t(self, x0, mask, mu, t, spk=None):
-        xt, z = self.forward_diffusion(x0, mask, mu, t)
-        time = t.unsqueeze(-1).unsqueeze(-1)
-        cum_noise = get_noise(time, self.beta_min, self.beta_max, cumulative=True)
-        noise_estimation = self.estimator(xt, mask, mu, t, spk)
-        noise_estimation *= torch.sqrt(1.0 - torch.exp(-cum_noise))
-        loss = torch.sum((noise_estimation + z)**2) / (torch.sum(mask)*self.n_feats)
-        return loss, xt
-
-    def compute_loss(self, x0, mask, mu, spk=None, offset=1e-5):
-        t = torch.rand(x0.shape[0], dtype=x0.dtype, device=x0.device,
-                       requires_grad=False)
-        t = torch.clamp(t, offset, 1.0 - offset)
-        return self.loss_t(x0, mask, mu, t, spk)
