@@ -21,7 +21,7 @@ spk_emb_dim = 64
 
 # encoder parameters
 n_enc_channels = 192
-filter_channels = 768
+filter_channels = 512
 filter_channels_dp = 256
 n_enc_layers = 6
 enc_kernel = 3
