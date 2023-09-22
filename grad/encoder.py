@@ -296,24 +296,20 @@ class TextEncoder(BaseModule):
         self.emb = torch.nn.Embedding(n_vocab, n_channels)
         torch.nn.init.normal_(self.emb.weight, 0.0, n_channels**-0.5)
 
-        self.prenet = ConvReluNorm(n_channels, n_channels, n_channels, 
-                                   kernel_size=5, n_layers=3, p_dropout=0.5)
         # hard cord 256 for bert, becareful!
         self.emb_bert = torch.nn.Linear(256, n_channels)
 
-        self.encoder = Encoder(n_channels + (spk_emb_dim if n_spks > 1 else 0), filter_channels, n_heads, n_layers, 
-                               kernel_size, p_dropout, window_size=window_size)
+        self.encoder = Encoder(n_channels + (spk_emb_dim if n_spks > 1 else 0), filter_channels,
+                               n_heads, n_layers, kernel_size, p_dropout, window_size=window_size)
 
         self.proj_m = torch.nn.Conv1d(n_channels + (spk_emb_dim if n_spks > 1 else 0), n_feats, 1)
-        self.proj_w = DurationPredictor(n_channels + (spk_emb_dim if n_spks > 1 else 0), filter_channels_dp, 
-                                        kernel_size, p_dropout)
+        self.proj_w = DurationPredictor(n_channels + (spk_emb_dim if n_spks > 1 else 0),
+                                        filter_channels_dp, kernel_size, p_dropout)
 
     def forward(self, x, x_lengths, bert, spk=None):
         x = self.emb(x) * math.sqrt(self.n_channels)
         x = torch.transpose(x, 1, -1)
         x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
-
-        x = self.prenet(x, x_mask)
 
         b = self.emb_bert(bert)
         b = torch.transpose(b, 1, -1)  # [b, h, t]
@@ -332,29 +328,41 @@ class TextEncoder(BaseModule):
 
 
 class FrameEncoder(BaseModule):
-    def __init__(self, n_feats, filter_channels, 
-                 n_heads, n_layers, kernel_size, 
-                 p_dropout, window_size=None, spk_emb_dim=64, n_spks=1):
+    def __init__(self, hidden_channels, filter_channels, n_heads, n_layers, 
+                 kernel_size=1, p_dropout=0.0, window_size=None, **kwargs):
         super(FrameEncoder, self).__init__()
-
-        self.n_feats = n_feats
+        self.hidden_channels = hidden_channels
         self.filter_channels = filter_channels
         self.n_heads = n_heads
         self.n_layers = n_layers
         self.kernel_size = kernel_size
         self.p_dropout = p_dropout
         self.window_size = window_size
-        self.spk_emb_dim = spk_emb_dim
-        self.n_spks = n_spks
 
-        self.encoder = Encoder(n_feats + (spk_emb_dim if n_spks > 1 else 0), filter_channels, n_heads, n_layers, 
-                               kernel_size, p_dropout, window_size=window_size)
+        self.drop = torch.nn.Dropout(p_dropout)
+        self.attn_layers = torch.nn.ModuleList()
+        self.norm_layers_1 = torch.nn.ModuleList()
+        self.ffn_layers = torch.nn.ModuleList()
+        self.norm_layers_2 = torch.nn.ModuleList()
+        for _ in range(self.n_layers):
+            self.attn_layers.append(MultiHeadAttention(hidden_channels, hidden_channels,
+                                    n_heads, window_size=window_size, p_dropout=p_dropout))
+            self.norm_layers_1.append(LayerNorm(hidden_channels))
+            self.ffn_layers.append(FFN(hidden_channels, hidden_channels,
+                                       filter_channels, kernel_size, p_dropout=p_dropout))
+            self.norm_layers_2.append(LayerNorm(hidden_channels))
 
-        self.proj_m = torch.nn.Conv1d(n_feats + (spk_emb_dim if n_spks > 1 else 0), n_feats, 1)
-
-    def forward(self, x, x_mask, spk=None):
-        if self.n_spks > 1:
-            x = torch.cat([x, spk.unsqueeze(-1).repeat(1, 1, x.shape[-1])], dim=1)
-        x = self.encoder(x, x_mask)
-        mu = self.proj_m(x) * x_mask
-        return mu
+    def forward(self, x, x_mask):
+        attn_mask = x_mask.unsqueeze(2) * x_mask.unsqueeze(-1)
+        for i in range(self.n_layers):
+            x = x * x_mask
+            z = x
+            y = self.attn_layers[i](x, x, attn_mask)
+            y = self.drop(y)
+            x = self.norm_layers_1[i](x + y)
+            y = self.ffn_layers[i](x, x_mask)
+            y = self.drop(y)
+            x = self.norm_layers_2[i](x + y)
+            x = x + z
+        x = x * x_mask
+        return x
