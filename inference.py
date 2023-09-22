@@ -85,7 +85,7 @@ if __name__ == '__main__':
                                                    n_timesteps=args.timesteps, 
                                                    temperature=args.temperature,
                                                    use_diff=args.diffusion,
-                                                   stoc=False, spk=None, length_scale=1)
+                                                   spk=None, length_scale=1)
 
             audio = vocoder(y_dec)
             audio = audio.squeeze()
