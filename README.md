@@ -118,6 +118,9 @@ Framework
 
 > python inference.py --file test.txt --checkpoint ./logs/new_exp/grad_tts_***.pt --timesteps 20 --temperature 1.15
 
+## Loss
+![grad_tts_loss](assets/grad_tts_loss.png)
+
 ## 本项目基于以下项目
 
 https://github.com/huawei-noah/Speech-Backbones/blob/main/Grad-TTS
