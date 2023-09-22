@@ -20,7 +20,7 @@ Framework
 
 	将 best_model.pt 改名为 prosody_model.pt，并放到 ./bert/prosody_model.pt
 
-3. 从Release页面下载TTS模型 [grad_tts.pt](https://github.com/PlayVoice/Grad-TTS-Chinese/releases/tag/release) from release page
+3. 从Release页面下载TTS模型 [grad_tts.pt](https://github.com/PlayVoice/Grad-TTS-Chinese/releases/tag/20230922) from release page
 
 	将 [grad_tts.pt]() 放到当前目录，或者任意地方
 
