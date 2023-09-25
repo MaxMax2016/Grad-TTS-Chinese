@@ -13,7 +13,7 @@ class FlowMatch(BaseModule):
         self.n_spks = n_spks
         self.spk_emb_dim = spk_emb_dim
         self.sigma_min = 1e-4
-        self.estimator = GradLogPEstimator2d(dec_dim, n_spks=n_spks, spk_emb_dim=spk_emb_dim, pe_scale=pe_scale)
+        self.estimator = GradLogPEstimator2d(dec_dim, n_feats=n_feats, n_spks=n_spks, spk_emb_dim=spk_emb_dim, pe_scale=pe_scale)
 
     @torch.inference_mode()
     def forward(self, mu, mask, n_timesteps, temperature=1.0, spks=None):
